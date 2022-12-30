@@ -1,0 +1,101 @@
+---
+title: "Practica 2," 
+output:
+  html_notebook: default
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+
+
+### Descripcion del dataset
+
+&emsp; En esta practica utilizaremos el dataset que obtuvimos en la Practica 1, “Precio de los carburantes por estación de servicio en España”. 
+  
+&emsp; El dataset incluye datos de precios de los diferentes carburantes para cada una de las estaciones de servicios localizadas en España. También incluye información detallada sobre cada una de las gasolineras con el fin de que estas puedan ser localizadas fácilmente por el usuario final.
+
+
+&emsp; El dataset se puede encontrar en el repositorio de Github creado para la Practica 1 (https://github.com/icuevort/web_scraping_gas_prices). A continuacion cargarmos los datos desde Github.
+
+
+```{r}
+library(RCurl)
+x <- getURL("https://raw.githubusercontent.com/icuevort/web_scraping_gas_prices/main/dataset/Gasolineras.csv")
+gasdata<- read.csv(text = x)
+head(gasdata)
+```
+
+
+Los datos se han cargado correctamente. Para explorar los datos en mas detalle, utilizamos ahora la funcion str. 
+
+```{r}
+str(gasdata)
+```
+
+
+Tenemos 12 variables, 10 de ellas son del tipo Character, y dos de ellas (latitud y longitud) son numericas.
+
+
+La variable precios incluye ,para cada estacion de servicio, los combustibles disponibles, y su precio. Para que estos datos sean utliles durante nuestro analisis, queremos crear nuevas columnas, una por cada tipo de carburante, que nos den el precio para cada gasolinera. 
+
+
+El primer paso sera crear una nueva columna con el indice, y despues crear una nueva tabla con solo 2 variables: index y precios
+```{r}
+gasdata$index<- 1:nrow(gasdata)
+preciosnew<-gasdata[,c("index","precios")]
+head(preciosnew)
+```
+
+A continuacion realizamos algunas tareas de limpieza sobre la variable precio, que nos ayudaran a separarla posteriormente.
+```{r}
+library(stringr)
+preciosnew$precios<-gsub ('.$','',sub('.',"",preciosnew$precios)) ## Eliminamos el primer y ultimo caracter
+preciosnew$precios<-gsub ('Gasóleo ','Gasóleo_',preciosnew$precios) # Sustituimos el espacio en blanco para el tipo gasoleo
+preciosnew$precios<-gsub ('Gas N. Compr','Gas_N._Compr',preciosnew$precios) # Sustituimos el espacio en blanco para el tipo gas
+preciosnew$precios<-gsub ('Gas N. Licuado','Gas_N._Licuado',preciosnew$precios)
+head(preciosnew$precios)
+```
+
+Hay 9 tipos de carburantes, asi que separaremos la columna precios en 8 nuevas columnas. Cada una de ellas incluira el tipo de carburante y el precio
+```{r}
+preciosnew[c('1','2','3','4','5','6','7','8','9')]<- str_split_fixed(preciosnew$precios,"', '",9)
+head(preciosnew[c('1','2','3','4','5','6','7','8','9')])
+
+```
+
+Seguidamente moveremos cada uno de las nuevas columnas a filas, manteniendo los valores de index y precio. De esta manera tendremos una fila por cada estacion de servicio y carburante disponible.
+```{r}
+library(data.table)
+gas_long <- melt(setDT(preciosnew), id.vars = c("index","precios"), variable.name = "gas")
+gas_long$value<-gsub("'",'',gas_long$value) #Eliminamos el caracter '
+head(gas_long)
+```
+
+Como no todas las gasolineras disponen de todos los productos, muchas filas en la columna value estan vacias. A continuacion eliminamos dichas filas
+```{r}
+gas_long<- gas_long [!(gas_long$value=="")]
+```
+Ahora separamos la columna value en dos nuevas columnas: tipo de carburante y precio. 
+
+```{r}
+library(tidyr)
+gas_long<- separate(gas_long,value,c("tipo","precio")," ",remove=FALSE)
+gas_long<-gas_long[,c("index","tipo","precio")]
+head(gas_long)
+```
+
+
+Creamos nuevas columnas, cada una para un tipo de carburante, y como valor el precio de cada combustible.
+```{r}
+gas_long<- spread(gas_long, tipo, precio)
+head(gas_long)
+```
+
+Finalmente unimos la tabla inicial con esta ultima.
+```{r}
+new_gasdata<- merge(gasdata,gas_long,by.x="index",by.y="index",all=TRUE)
+head(new_gasdata)
+```
+
+
