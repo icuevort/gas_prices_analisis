@@ -1,5 +1,5 @@
 # Gas Prices Analysis
-UOC, Master en Ciencia de Datos, Tipologia de los datos, Practica 1
+UOC, Master en Ciencia de Datos, Tipologia de los datos, Practica 2
 
 ## Integrantes del equipo: 
 * Imanol Miguez Quintela.
