@@ -2,16 +2,19 @@
 title: "Tipologia y Ciclo de Vida de los Datos, Practica 2"
 subtitle: "Imanol Miguez Quintela/Ivan Cuevas Ortin" 
 output:
+  html_notebook: default
+  pdf_document: 
+    latex_engine: xelatex
+    toc: yes
+    toc_depth: '5'
   html_document:
     toc: yes
     toc_depth: 5
     df_print: paged
-  pdf_document: default
-  html_notebook: default
   word_document: default
 ---
 
-```{r}
+```{r, results='hide', message=FALSE, warning=FALSE}
 if(!require(RCurl)){
   install.packages('RCurl',dependencies =c("Depends","Imports"),repos='http://cran.es.r-project.org')
   require(RCurl)
@@ -60,6 +63,19 @@ if(!require(lsr)){install.packages('lsr',dependencies =c("Depends","Imports"),re
   require(lsr)
 }
 
+if(!require(DescTools)){install.packages('DescTools',dependencies =c("Depends","Imports"),repos='http://cran.es.r-project.org')
+  require(DescTools)
+}
+
+if(!require(gridExtra)){
+  install.packages('gridextra',dependencies =c("Depends","Imports"),repos='http://cran.es.r-project.org')
+  require(gridExtra)
+}
+
+if(!require(caret)){
+  install.packages('caret',dependencies =c("Depends","Imports"),repos='http://cran.es.r-project.org')
+  require(caret)
+}
 ```
 
 
@@ -340,9 +356,9 @@ En este apartado vamos a responder a las siguientes preguntas:
 
 * ¿Se puede predecir el valor del combustible con los datos que tenemos?
 
-* ¿Existe correlación entre la latitud/longitud con el precio?
+* ¿Existe diferencia en el precio del Gasóleo A entre el norte y el sur de España? ¿y entre el este y el oeste?
 
-* ¿Varían los precios significativamente con latitudes por encima de 40,3093?
+* ¿Podríamos predecir si la gasolinera esta en el norte sabiendo el precio del Gasóleo A? Y si está en el este?
 
 
 ### 3.1 ¿Cuales son las cadenas de gasolineras mas caras?
@@ -615,3 +631,281 @@ summary(model)
 #### 3.2.3 Conclusiones
 
 La regresion lineal con las variables num_gas_empr (numero de gasolineras por empresa), latitud, longitud y la interaccion entre estas dos ultimas puede ser usada para calcular el precio del Gasoleo_A. El modelo explica el 58% de la variabilidad en la variable dependiente
+
+### 3.3 ¿Existe diferencia en el precio del Gasoleo A entre el norte y el sur de España? ¿y entre el este y el oeste?
+
+
+#### 3.3.1 Consideraciones iniciales y creacion del dataset
+
+Para responder a esta pregunta vamos a realizar las siguientes consideraciones:
+
+* Tomaremos todas las latitudes por encima de 40,3093 como el norte, debido a que se considera el centro de la latitud de la península. 
+* Tomaremos todas las longitudes por encima de -3,6842 como el este, debido a que se considera el centro de la longitud de la península. 
+* Solo tomaremos las gasolineras que tienen Gasoleo_A.
+
+A continuación, creamos el dataset con las condiciones anteriores. Primero obtenemos las variables *latitud*, *longitud* y *Gasoleo_A*. Despues, seleccionamos las gasolineras con gasóleo A. Finalmente, en función su valor cambiamos la latitud por el valor North o South y lo mismo con la longitud, pero con los valores East y West.
+
+```{r}
+df_latlong <- new_gasdata[,c("latitud", "longitud", "Gasoleo_A")]
+
+df_latlong <- df_latlong[!is.na(df_latlong["Gasoleo_A"]),]
+
+
+df_latlong["latitud"] <- sapply(df_latlong$latitud, function(l) ifelse(l >= 40.3093, "North", "South"))
+
+df_latlong["longitud"] <- sapply(df_latlong$longitud, function(l) ifelse(l >= -3.6842, "East", "West"))
+
+head(df_latlong, 3)
+
+```
+#### 3.3.2 Análisis de la latitud
+
+##### 3.3.2.1 Análisis visual de la latitud
+
+Comprobamos visualmente la distribución del precio del Gasóleo A en función de si es el norte o el sur y la frecuencia de gasolinas en el norte y en el sur.
+
+```{r}
+ggplot(data =  df_latlong, aes(x=Gasoleo_A, fill=latitud)) + 
+  geom_histogram(bins = 30) + 
+  scale_fill_manual(values = c("Red", "Cyan")) +
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.title = element_blank(),
+        panel.background = element_rect(fill = "#ffffff")) +
+  ylab("Número de Gasolineras") +
+  xlab("Precio Gasoleo A")
+
+ggplot(df_latlong, aes(x = latitud, y = Gasoleo_A, fill = latitud)) + 
+  geom_violin() + 
+  scale_fill_manual(values = c("Red", "Cyan")) +
+  geom_boxplot(width = .4) + 
+  theme(panel.background = element_rect(fill = "#ffffff"),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        legend.title = element_blank()) +
+  ylab("Precio Gasoleo A")
+
+ggplot(df_latlong, aes(x = latitud, fill=latitud)) +
+  geom_bar() + 
+  scale_fill_manual(values = c("Red", "Cyan")) +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        legend.title = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.x =  element_blank(),
+        axis.text.y =  element_blank(),
+        axis.title = element_blank(),
+        panel.background = element_rect(fill = "#ffffff")) +
+  geom_text(aes(label = ..count..), stat = "count", vjust = 2, colour = "black") +
+  geom_text(aes(label = round(..count../ nrow(df_latlong), 2)), stat = "count", vjust = 4, colour = "black") + 
+  ggtitle ('Número de Gasolineras')
+```
+Visualmente no vemos una gran diferencia en la distribución del precio en función de la latitud. Sin embargo, parece que la media de los precios es inferior en el sur. Así mismo, la proporción de gasolineras es muy similar, vemos que el 47% de las gasolineras están en el sur y el 53 en el norte.
+
+##### 3.3.2.2 Hipotesis nula y alternativa para la latitud
+
+La hipótesis nula es que la media del precio del Gasóleo A del norte es igual a la del sur y la alternativa es que son distintas.
+$$H_0: \mu_N=\mu_S$$
+$$H_1: \mu_N\neq\mu_S$$
+
+##### 3.3.2.3 Aplicación del test para la latitud
+
+Sabemos que son dos muestras independientes y por el teorema del límite central asumimos normalidad, ya que usamos la media de las muestras y estas son lo suficientemente grandes (n > 30). Además, no conocemos las varianzas de ambas muestras. 
+
+Ahora comprobamos si la varianza es la misma en el norte y en el sur.
+
+```{r}
+north <- df_latlong$Gasoleo_A[df_latlong$latitud == "North"]
+south <- df_latlong$Gasoleo_A[df_latlong$latitud == "South"]
+
+var.test(north, south)
+```
+Al realizar el test de varianza vemos que las varianzas son distintas, ya que $p-value<0.05$. Por lo que realizamos el test especificando que las varianzas son diferentes.
+
+```{r}
+t.test(north, south, var.equal=FALSE)
+```
+El valor *p* obtenido es menor que el nivel de significancia (0.05) y, por lo tanto, se puede rechazar la hipótesis nula de igualdad de medias de precio en las gasolineras entre el norte y el sur.
+
+
+#### 3.3.3 Análisis de la longitud
+
+##### 3.3.3.1 Análisis visual de la longitud
+
+Comprobamos visualmente la distribución del precio del Gasóleo A en función de si es el este o el oeste y la frecuencia de gasolinas en el este y en el oeste.
+
+```{r}
+ggplot(data =  df_latlong, aes(x=Gasoleo_A, fill=longitud)) + 
+  geom_histogram(bins = 30) + 
+  scale_fill_manual(values = c("#77ff00", "#7700ff")) +
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.title = element_blank(),
+        panel.background = element_rect(fill = "#ffffff")) +
+  ylab("Número de Gasolineras") +
+  xlab("Precio Gasoleo A")
+
+ggplot(df_latlong, aes(x = longitud, y = Gasoleo_A, fill = longitud)) + 
+  geom_violin() + 
+  scale_fill_manual(values = c("#77ff00", "#7700ff")) +
+  geom_boxplot(width = .4) + 
+  theme(panel.background = element_rect(fill = "#ffffff"),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        legend.title = element_blank()) +
+  ylab("Precio Gasoleo A")
+
+ggplot(df_latlong, aes(x = longitud, fill=longitud)) +
+  geom_bar() + 
+  scale_fill_manual(values = c("#77ff00", "#7700ff")) +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        legend.title = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.x =  element_blank(),
+        axis.text.y =  element_blank(),
+        axis.title = element_blank(),
+        panel.background = element_rect(fill = "#ffffff")) +
+  geom_text(aes(label = ..count..), stat = "count", vjust = 2, colour = "black") + 
+  geom_text(aes(label = round(..count../ nrow(df_latlong), 2)), stat = "count", vjust = 4, colour = "black") + 
+  ggtitle ('Número de Gasolineras')
+```
+
+Visualmente, al igual que con la latitud, no vemos una gran diferencia en la distribución del precio en función de la longitud. Sin embargo, parece que la media de los precios es inferior en el este. Así mismo, la proporción de gasolineras es muy similar, vemos que el 55% de las gasolineras están en el este y el 45% en el oeste.
+
+##### 3.3.3.2 Hipotesis nula y alternativa para la longitud
+
+La hipótesis nula es que la media del precio del Gasóleo A del este es igual a la del oeste y la alternativa que es distinta.
+$$H_0: \mu_E=\mu_W$$
+$$H_1: \mu_E\neq\mu_W$$
+
+##### 3.3.3.3 Aplicación del test para la latitud
+
+Sabemos que son dos muestras independientes y por el teorema del límite central asumimos normalidad, ya que usamos la media de las muestras y estas son lo suficientemente grandes (n > 30). Además, no conocemos las varianzas de ambas muestras. 
+
+Ahora comprobamos si la varianza es la misma en el este y en el oeste.
+
+```{r}
+east <- df_latlong$Gasoleo_A[df_latlong$longitud == "East"]
+west <- df_latlong$Gasoleo_A[df_latlong$longitud == "West"]
+
+var.test(east, west)
+```
+Al realizar el test de varianza vemos que las varianzas son distintas, ya que $p-value<0.05$.
+
+```{r}
+t.test(east, west, var.equal=FALSE)
+```
+El valor *p* obtenido es menor que el nivel de significancia (0.05) y, por lo tanto, se puede rechazar la hipótesis nula de igualdad de medias de precio en las gasolineras entre el este y el oeste.
+
+#### 3.3.4 Conclusiones
+
+Tras los resultados obtenidos podemos asegurar que hay diferencia de precios entre norte y sur y entre este y oeste. Para futuras líneas de estudio se podría comprobar que latitudes tienen menor precio y realizar una comparación por pares, por ejemplo, comparando el noroeste con el sudeste.
+
+### 3.4 ¿Podríamos predecir si la gasolinera esta en el norte sabiendo el precio del Gasoleo A? Y si esta en el este?
+
+#### 3.4.1 Modelo de regresión logística para la latitud.
+
+##### 3.4.1.1 Generación de los conjuntos de entrenamiento y de test
+
+Primero creamos un juego de datos que contenga solo el precio y la clasificación de la latitud.
+```{r}
+df_north <- new_gasdata[,c("latitud", "Gasoleo_A")]
+df_north <- df_north[!is.na(df_north["Gasoleo_A"]),]
+
+
+df_north["latitud"] <- sapply(df_north$latitud, function(l) ifelse(l >= 40.3093, 1, 0))
+
+head(df_north, 3)
+```
+
+Dividimos los datos en entrenamiento y prueba.
+```{r}
+
+set.seed(2023)
+
+# Seleccionamos el 80% para entrenamiento y el 20% para test
+indice <- createDataPartition(df_north$latitud, p=0.80, list=FALSE)
+
+# Definimos el conjunto de entrenamiento:
+train <- df_north[indice,]
+
+# Definir el conjunto de test:
+test <- df_north[-indice,]
+```
+
+
+##### 3.4.1.2 Creación del modelo para la latitud
+
+Entrenamos el modelo con los datos de entrenamiento.
+
+```{r}
+Modl <- glm(latitud ~ ., data = train, family = binomial(link = "logit"))
+summary(Modl)
+```
+
+##### 3.4.1.3 Comprobación de la bondad del modelo
+
+Comprobamos la bondad del modelo mediante una matriz de confusión. Para ello usamos los datos de test y predecimos la longitud con los precios de test.
+
+```{r}
+pred <- ifelse(predict(Modl, newdata = test, type = "response")>0.5,1,0)
+
+confusionMatrix(table(pred, test$latitud), positive = "1")
+```
+La precisión no es muy buena, siendo capaz el modelo de clasificar solo el 56,88% de los datos. Además, parece que clasifica mejor las gasolineras del sur, habiendo clasificado correctamente el 70,16% de las gasolineras del sur. Así mismo, solo ha clasificado correctamente el 42,22% de las gasolineras del norte.
+
+#### 3.4.2 Modelo de regresión logística para la longitud.
+
+##### 3.4.2.1 Generación de los conjuntos de entrenamiento y de test
+
+Primero creamos un juego de datos que contenga solo el precio y la clasificación de la longitud.
+
+```{r}
+df_east <- new_gasdata[,c("longitud", "Gasoleo_A")]
+df_east <- df_east[!is.na(df_east["Gasoleo_A"]),]
+
+
+df_east["longitud"] <- sapply(df_east$longitud, function(l) ifelse(l >= -3.6842, 1, 0))
+
+head(df_east, 3)
+```
+Dividimos los datos en entrenamiento y prueba.
+
+```{r}
+
+set.seed(2023)
+
+# Seleccionamos el 80% para entrenamiento y el 20% para test
+indice <- createDataPartition(df_east$longitud, p=0.80, list=FALSE)
+
+# Definimos el conjunto de entrenamiento:
+train <- df_east[indice,]
+
+# Definir el conjunto de test:
+test <- df_east[-indice,]
+```
+
+##### 3.4.2.2 Creación del modelo para la latitud
+
+Entrenamos el modelo con los datos de entrenamiento.
+
+```{r}
+Modl2 <- glm(longitud ~ ., data = train, family = binomial(link = "logit"))
+summary(Modl)
+```
+
+##### 3.4.2.3 Comprobación de la bondad del modelo
+
+Comprobamos la bondad del modelo mediante una matriz de confusión. Para ello usamos los datos de test y predecimos la longitud con los precios de test.
+
+```{r}
+pred <- ifelse(predict(Modl2, newdata = test, type = "response")>0.5,1,0)
+
+confusionMatrix(table(pred, test$longitud), positive = "1")
+```
+La precisión no es muy buena, siendo capaz el modelo de clasificar solo el 56,88% de los datos. Además, parece que clasifica muy bien las gasolineras del este, habiendo clasificado correctamente el 91,98% de las gasolineras del este. Sin embargo, solo ha clasificado correctamente el 13,94% de las gasolineras del oeste.
+
+#### 3.4.3 Conclusiones
+
+Para ambos modelos, ya sea buscando clasificar la longitud o la latitud, hemos obtenido la misma precisión (0.5688), la cual no es buena. Así mismo, el modelo para predecir la longitud es capaz de clasificar mejor las gasolineras del sur, mientras que el modelo para la latitud clasificar mejor las gasolineras del este.
