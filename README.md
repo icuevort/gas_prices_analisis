@@ -8,3 +8,4 @@ UOC, Master en Ciencia de Datos, Tipologia de los datos, Practica 2
 ## Documentos
 * Memoria: justificacion de la importancia de los datos elegidos para la practica, website seleccionada para la extraccion de datos, y pasos seguidos durante el web scraping.
 * Data/Gasolineras.csv: conjunto de datos inicial que incluye los precios de los carburantes de mas de 11.000 gasolineras es España, e informacion detallada sobre la localizacion de cada una de ellas.
+* Data/new_gasdata.csv: conjunto de datos resultante tras la limpieza de los campos necesarios para el analisis. Tambien se han incluido nuevas columnas con el precio por combustible.
